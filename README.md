@@ -1,225 +1,535 @@
 # Raspberry Pi Zero W センサーシリアルサーバー
 
-Raspberry Pi Zero W上でセンサーデータをシリアル通信で提供する改善されたサーバープログラムです。
+Raspberry Pi Zero W上でEnvironment Sensor HATからセンサーデータを取得し、シリアル通信でクライアントに提供する高性能なサーバーアプリケーションです。
 
-## 🎯 改善点
+## 📋 目次
 
-元のコードから以下の点を改善しました：
+- [📖 概要](#-概要)
+- [🎯 主な機能・改善点](#-主な機能改善点)
+- [🚀 利用者向けガイド](#-利用者向けガイド)
+  - [前提条件](#前提条件)
+  - [インストールと初期設定](#インストールと初期設定)
+  - [設定](#設定)
+  - [実行](#実行)
+  - [API仕様](#api仕様)
+  - [トラブルシューティング](#トラブルシューティング)
+- [⚙️ システム管理者向けガイド](#️-システム管理者向けガイド)
+  - [サービス化](#サービス化)
+  - [パフォーマンス監視](#パフォーマンス監視)
+  - [ログ管理](#ログ管理)
+- [🔧 開発者向けガイド](#-開発者向けガイド)
+  - [アーキテクチャ概要](#アーキテクチャ概要)
+  - [コードベース構造](#コードベース構造)
+  - [開発環境セットアップ](#開発環境セットアップ)
+  - [コードスタイル・規約](#コードスタイル規約)
+  - [機能拡張ガイド](#機能拡張ガイド)
+  - [テスト・デバッグ](#テストデバッグ)
 
-### 🔴 高重要度の改善
-- ✅ **包括的なエラーハンドリング**: シリアル通信、センサー読み取りエラーに対応
-- ✅ **適切なリソース管理**: Context Managerを使用した確実なリソース解放
-- ✅ **データ形式の改善**: 改行文字付きの適切なレスポンス形式
-- ✅ **Graceful Shutdown**: SIGINT/SIGTERMによる正常終了
+---
 
-### 🟡 中重要度の改善
-- ✅ **設定ファイル対応**: JSONによる外部設定化
-- ✅ **パフォーマンス最適化**: CPU使用率の削減（1秒→0.1秒間隔）
-- ✅ **入力検証**: コマンド長制限、許可コマンドのホワイトリスト
-- ✅ **ログ機能**: ローテーション対応のファイル・コンソール出力
+## 📖 概要
 
-### 🟢 低重要度の改善
-- ✅ **依存関係管理**: バージョン指定付きrequirements.txt
-- ✅ **コマンド拡張**: ping、statusコマンドの追加
-- ✅ **テストツール**: 動作確認用クライアントスクリプト
+本プロジェクトは、Raspberry Pi Zero W上でWaveshare Environment Sensor HATの6種類のセンサー（環境センサー＋9軸モーションセンサー）から取得したデータを、安定したシリアル通信で外部クライアントに提供するサーバーアプリケーションです。
 
-## 📋 必要な環境
+### 対応センサー
+- **環境センサー**: BME280（温度・湿度・気圧）、TSL2591（照度）、LTR390（UV）、SGP40（VOC）
+- **モーションセンサー**: ICM20948/MPU925x（加速度・ジャイロ・磁気）
 
+### 主な特徴
+- ⚡ **高性能**: 最適化されたループ処理で低CPU使用率を実現
+- 🛡️ **堅牢性**: 包括的なエラーハンドリングと適切なリソース管理
+- 📊 **豊富なデータ**: JSON形式で構造化されたセンサーデータを提供
+- 🔧 **柔軟な設定**: 外部設定ファイルによる詳細なカスタマイズ
+
+---
+
+## 🎯 主な特徴
+
+### 🛡️ 安定性・信頼性
+- **エラーから自動復旧**: 通信エラーやセンサー異常が発生しても安全に動作継続
+- **安全な終了処理**: Ctrl+Cでの停止時も、データを失うことなく正常終了
+- **標準的なデータ形式**: JSONで読み取りやすいデータを提供
+
+### ⚙️ 使いやすさ
+- **設定ファイルで簡単カスタマイズ**: 通信速度やログレベルなどを自由に調整
+- **低CPU使用率**: 長時間動作してもPi Zero Wに負荷をかけません
+- **動作確認コマンド**: `ping`や`status`で接続状態をすぐに確認
+
+### 🔧 開発・運用サポート
+- **詳細なログ出力**: 問題発生時の原因調査が容易
+- **自動ログ管理**: ファイルサイズが大きくなっても自動で整理
+- **テストツール付属**: 動作確認用のスクリプトで簡単に動作テスト
+- **サービス化対応**: システム起動時の自動実行をサポート
+
+---
+
+## 🚀 利用者向けガイド
+
+### 前提条件
+
+#### ハードウェア要件
+- Raspberry Pi Zero W（または他のRaspberry Piモデル）
+- Waveshare Environment Sensor HAT
+- USB-OTGによるシリアル通信設定、またはUSB-Serial変換器
+
+#### ソフトウェア要件
+- Raspberry Pi OS（推奨: Lite版）
 - Python 3.7以上
-- Raspberry Pi Zero W
-- Environment Sensor HAT (BME280, TSL2591, LTR390, SGP40, ICM20948/MPU925x)
-- シリアル通信デバイス（USB-Serial変換等）
+- I2Cインターフェース有効化
 
-## 🚀 インストール
+### インストールと初期設定
 
-1. 以下の記事を参考に、USB-OTGで、PC-ラズパイ間のシリアル通信を有効化する
-    - https://suzu-ha.com/entry/2024/06/01/232052
-    - ⚠：「serial-getty@ttyGS0.service の有効化」は不要。
-        - これをすると、ラズパイのコンソールがシリアルポートに出力され、シリアルサーバーが起動しなくなる。
+#### 1. USB-OTGシリアル通信の設定
+
+詳細は以下の記事を参照してください：
+- https://suzu-ha.com/entry/2024/06/01/232052
+
+⚠️ **重要**: `serial-getty@ttyGS0.service`の有効化は行わないでください。これを有効にすると、コンソール出力がシリアルポートに混在し、サーバーが正常に動作しません。
+
+#### 2. 必要なシステムパッケージのインストール
 
 ```bash
-# 各種前提パッケージのインストール
-sudo apt-get install python3-smbus
-sudo -H apt-get install python3-pil
-sudo apt-get install i2c-tools
+# I2C関連パッケージ
+sudo apt-get update
+sudo apt-get install python3-smbus i2c-tools python3-pil
+
+# GPIO制御ライブラリ
 pip install RPi.GPIO
 ```
 
+#### 3. I2Cインターフェースの有効化
+
 ```bash
-# I2Cの有効化
 sudo raspi-config
 # 「3 Interfacing Options」→「I5 I2C」を選択し、有効化
 ```
 
+#### 4. プロジェクトのセットアップ
+
 ```bash
-# Python環境のセットアップ
+# リポジトリのクローンまたはダウンロード
+git clone <repository-url>
+cd raspizw-sensor-serial
+
+# Python仮想環境の作成
 python3 -m venv venv
 source venv/bin/activate
-# 必要なパッケージのインストール
+
+# 依存関係のインストール
 pip install -r requirements.txt
 ```
 
-```bash
-# ---USBポートの確認と設定
-python -m serial.tools.list_ports
-# /dev/ttyS0などが表示される。
+#### 5. シリアルポートの確認と設定
 
-# ---使用するシリアルポートの指定
+```bash
+# 利用可能なシリアルポートの確認
+python -m serial.tools.list_ports
+
+# USB-OTGの場合は通常 /dev/ttyS0 → /dev/ttyGS0 に設定
+# 設定ファイルの編集
 nano config.json
-# serial.portの値を、上記で確認したポートに変更する。
-# このとき、ttyS0はttyGS0に変更すること。
 ```
 
-## ⚙️ 設定
+### 設定
 
-`config.json`ファイルで各種設定を変更できます：
+`config.json`ファイルで詳細な設定が可能です：
 
 ```json
 {
     "serial": {
-        "port": "/dev/ttyGS0",         # シリアルポート
+        "port": "/dev/ttyGS0",         # シリアルポート（USB-OTG使用時）
         "baudrate": 9600,              # ボーレート
-        "timeout": 1.0,                # 読み取りタイムアウト
-        "write_timeout": 1.0           # 書き込みタイムアウト
+        "timeout": 1.0,                # 読み取りタイムアウト（秒）
+        "write_timeout": 1.0           # 書き込みタイムアウト（秒）
     },
     "system": {
-        "loop_interval": 0.1,          # メインループ間隔（秒）
-        "max_command_length": 256,     # 最大コマンド長
-        "shutdown_timeout": 5.0        # 終了タイムアウト
+        "loop_interval": 0.1,          # メインループ間隔（秒）- 性能調整
+        "max_command_length": 256,     # コマンド最大長（セキュリティ）
+        "shutdown_timeout": 5.0        # 終了処理タイムアウト（秒）
     },
     "logging": {
-        "level": "INFO",               # ログレベル
+        "level": "INFO",               # ログレベル: DEBUG/INFO/WARNING/ERROR
+        "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         "file": "sensor_server.log",   # ログファイル名
-        "max_bytes": 1048576,          # ログファイル最大サイズ
-        "backup_count": 3              # ローテーション数
+        "max_bytes": 1048576,          # ログファイル最大サイズ（1MB）
+        "backup_count": 3              # ローテーション保持数
     }
 }
 ```
 
-## 🏃 実行
+#### 設定パラメータ詳細
 
-### サーバー起動
+| カテゴリ | パラメータ | 説明 | デフォルト値 | 推奨値 |
+|----------|------------|------|-------------|--------|
+| serial | port | シリアルデバイスパス | /dev/ttyUSB0 | /dev/ttyGS0（USB-OTG） |
+| serial | baudrate | 通信速度 | 9600 | 9600〜115200 |
+| system | loop_interval | ポーリング間隔 | 0.1秒 | 0.05〜0.5秒 |
+| system | max_command_length | セキュリティ制限 | 256文字 | 256〜512文字 |
+| logging | level | ログレベル | INFO | INFO（本番）/DEBUG（開発） |
+
+### 実行
+
+#### 基本実行
+
 ```bash
 # デフォルト設定で実行
 python sensor-serial-server.py
 
-# カスタム設定ファイルを指定
+# カスタム設定ファイルで実行
 python sensor-serial-server.py custom_config.json
 ```
 
-### 動作確認（テストクライアント）
+#### 動作確認
+
 ```bash
-# デフォルトポートでテスト
+# テストクライアントでの確認
 python test_serial_client.py
 
-# カスタムポートでテスト
+# カスタムポートでのテスト
 python test_serial_client.py /dev/ttyUSB1
 ```
 
-## 📡 サポートコマンド
+### API仕様
 
-| コマンド | 説明 | レスポンス例 |
-|----------|------|-------------|
-| `get_sensor_data` | 全センサーデータを取得 | `{"environment": {...}, "motion": {...}}` |
-| `ping` | 接続確認 | `{"status": "pong"}` |
-| `status` | サーバー状態確認 | `{"sensor_initialized": true, "running": true, "port": "/dev/ttyUSB0"}` |
+#### サポートコマンド
 
-- すべてのコマンドは、「\r\n」で終端して送信される必要があります。
+| コマンド | 説明 | 戻り値 | 用途 |
+|----------|------|--------|------|
+| `get_sensor_data` | 全センサーデータを取得 | SensorDataオブジェクト | メインデータ取得 |
+| `ping` | サーバー疎通確認 | `{"status": "pong"}` | 接続テスト |
+| `status` | サーバー状態確認 | サーバー情報オブジェクト | ヘルスチェック |
 
-### レスポンス形式
+#### リクエスト形式
 
-すべてのレスポンスは`\r\n`で終端されるJSON形式です：
+- すべてのコマンドは`\r\n`で終端して送信
+- 文字エンコーディング: UTF-8
+- 最大コマンド長: 256文字（設定可能）
+
+例:
+```
+get_sensor_data\r\n
+```
+
+#### レスポンス形式
+
+すべてのレスポンスは`\r\n`で終端されるJSON形式です。
+
+##### `get_sensor_data`のレスポンス例:
 
 ```json
 {
     "environment": {
-        "temperature": 25.0,
-        "humidity": 50.0,
-        "pressure": 1013.25,
-        "light": 100.0,
-        "uv": 100,
-        "voc": 100.0
+        "temperature": 25.0,        // 温度（℃）
+        "humidity": 50.0,           // 湿度（%）
+        "pressure": 1013.25,        // 気圧（hPa）
+        "light": 100.0,             // 照度（lux）
+        "uv": 100,                  // UV値
+        "voc": 100.0                // VOC値
     },
     "motion": {
-        "orientation": {"roll": 0.0, "pitch": 0.0, "yaw": 0.0},
-        "acceleration": {"x": 0.0, "y": 0.0, "z": 0.0},
-        "gyroscope": {"x": 0.0, "y": 0.0, "z": 0.0},
-        "magnetic": {"x": 0.0, "y": 0.0, "z": 0.0}
+        "orientation": {
+            "roll": 0.0,            // ロール角（度）
+            "pitch": 0.0,           // ピッチ角（度）
+            "yaw": 0.0              // ヨー角（度）
+        },
+        "acceleration": {
+            "x": 0.0,               // X軸加速度
+            "y": 0.0,               // Y軸加速度
+            "z": 0.0                // Z軸加速度
+        },
+        "gyroscope": {
+            "x": 0.0,               // X軸角速度
+            "y": 0.0,               // Y軸角速度
+            "z": 0.0                // Z軸角速度
+        },
+        "magnetic": {
+            "x": 0.0,               // X軸磁場
+            "y": 0.0,               // Y軸磁場
+            "z": 0.0                // Z軸磁場
+        }
     }
 }
 ```
 
-## 🔧 トラブルシューティング
+##### `status`のレスポンス例:
 
-### よくある問題
-
-1. **シリアルポートが開けない**
-   ```
-   解決策: ポート名を確認、権限をチェック（sudo実行またはグループ追加）
-   ```
-
-2. **センサー初期化エラー**
-   ```
-   解決策: I2C有効化確認、配線チェック、センサーHATの接続確認
-   ```
-
-3. **応答が返ってこない**
-   ```
-   解決策: ボーレート設定確認、ケーブル確認、ログファイルでエラー確認
-   ```
-
-### ログ確認
-```bash
-# リアルタイムログ監視
-tail -f sensor_server.log
-
-# エラーのみ確認
-grep ERROR sensor_server.log
+```json
+{
+    "sensor_initialized": true,     // センサー初期化状態
+    "running": true,                // サーバー稼働状態
+    "port": "/dev/ttyGS0"          // 使用中のシリアルポート
+}
 ```
 
-## 🛡️ セキュリティ
+#### エラー処理
 
-- コマンド長制限（デフォルト256文字）
-- 許可コマンドのホワイトリスト方式
-- エラー時の適切な情報隠蔽
+不正なコマンドや処理エラーの場合:
 
-## 📊 パフォーマンス
+```json
+{
+    "error": "invalid command"      // エラーメッセージ
+}
+```
 
-- メモリ使用量: 約50-100MB
-- CPU使用率: <5%（アイドル時）
-- 応答時間: <100ms（通常時）
+---
 
-## 🔄 システムサービス化
+## ⚙️ システム管理者向けガイド
 
-systemdサービスとして常駐させる場合：
+### サービス化
+
+#### systemdサービスの設定
+
+プロダクション環境での自動起動設定:
 
 ```bash
+# サービスファイルのコピー
 sudo cp sensor-serial-server.service /etc/systemd/system/
+
+# サービスファイルの編集（パスを環境に合わせて修正）
+sudo nano /etc/systemd/system/sensor-serial-server.service
+```
+
+#### サービス管理
+
+```bash
+# サービス有効化・開始
 sudo systemctl enable sensor-serial-server
 sudo systemctl start sensor-serial-server
-```
 
-停止・無効化する場合：
-```bash
+# ステータス確認
+sudo systemctl status sensor-serial-server
+
+# ログ確認
+sudo journalctl -u sensor-serial-server -f
+
+# サービス停止・無効化
 sudo systemctl stop sensor-serial-server
 sudo systemctl disable sensor-serial-server
 ```
 
-## 📝 開発者向け情報
 
-### クラス構造
-- `SerialServerConfig`: 設定管理
-- `SensorSerialServer`: メインサーバークラス
-- Context Manager: リソース管理
-- Signal Handler: Graceful shutdown
+### ログ管理
 
-### 拡張方法
-新しいコマンドを追加する場合：
+#### ログローテーション設定
 
-1. `_validate_command()`の`valid_commands`に追加
-2. `_process_command()`に処理ロジックを追加
-3. 必要に応じてテストクライアントを更新
+自動ローテーションは設定済みですが、手動管理も可能：
 
-## 📄 ライセンス
+```bash
+# ログファイルサイズ確認
+ls -lh sensor_server.log*
 
-このプロジェクトは、元のコードの改善版として提供されています。 
+# 古いログの圧縮
+gzip sensor_server.log.1
+
+# ログの削除（注意：重要なデータを確認後）
+rm sensor_server.log.2.gz
+```
+
+#### 集中ログ管理
+
+rsyslogやjournaldとの連携:
+
+```bash
+# systemdジャーナルでの確認
+sudo journalctl -u sensor-serial-server --since "1 hour ago"
+
+# ログレベル別フィルタ
+sudo journalctl -u sensor-serial-server -p err
+```
+
+---
+
+## 🔧 開発者向けガイド
+
+### アーキテクチャ概要
+
+#### システム構成
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Serial Client │◄──►│ Serial Server   │◄──►│ Sensor HAT      │
+│                 │    │                 │    │                 │
+│ - Test Client   │    │ - Main Loop     │    │ - BME280        │
+│ - External App  │    │ - Command Proc  │    │ - TSL2591       │
+│                 │    │ - Config Mgmt   │    │ - LTR390        │
+└─────────────────┘    │ - Logging       │    │ - SGP40         │
+                       │ - Error Handling│    │ - ICM20948/MPU  │
+                       └─────────────────┘    └─────────────────┘
+```
+
+#### コンポーネント関係図
+
+```
+SensorSerialServer (メイン)
+├── SerialServerConfig (設定管理)
+├── SensorHub (センサー統合)
+│   ├── BME280 (環境)
+│   ├── TSL2591 (照度)  
+│   ├── LTR390 (UV)
+│   ├── SGP40 (VOC)
+│   └── ICM20948/MPU925x (モーション)
+└── ログ・エラーハンドリング
+```
+
+### コードベース構造
+
+#### ファイル構成
+
+```
+raspizw-sensor-serial/
+├── sensor-serial-server.py    # メインサーバーアプリケーション
+├── Sensor.py                  # センサー統合クラス
+├── config.json                # 設定ファイル
+├── requirements.txt           # Python依存関係
+├── sensor-serial-server.service # systemdサービス設定
+├── modules/                   # センサーモジュール
+│   ├── BME280.py             # 温度・湿度・気圧センサー
+│   ├── TSL2591.py            # 照度センサー
+│   ├── LTR390.py             # UVセンサー
+│   ├── SGP40.py              # VOCセンサー
+│   ├── ICM20948.py           # 9軸センサー（新型）
+│   └── MPU925x.py            # 9軸センサー（旧型）
+└── README.md                  # このドキュメント
+```
+
+#### 主要クラス設計
+
+##### `SensorSerialServer`クラス
+
+```python
+class SensorSerialServer:
+    """メインサーバークラス
+    
+    責務:
+    - シリアル通信管理
+    - コマンド処理
+    - センサーデータ取得
+    - エラーハンドリング
+    - ログ管理
+    """
+    
+    def __init__(self, config_path: str = "config.json")
+    def run(self) -> bool
+    def shutdown(self) -> None
+    def _process_command(self, command: str) -> bytes
+    def _validate_command(self, command: str) -> bool
+```
+
+##### `SensorHub`クラス
+
+```python
+class SensorHub:
+    """センサー統合管理クラス
+    
+    責務:
+    - 各センサーの初期化
+    - データ取得の統一インターフェース
+    - センサー固有エラーのハンドリング
+    """
+    
+    def __init__(self) -> None
+    def read_all(self) -> SensorData
+    def read_environment(self) -> EnvironmentData  
+    def read_motion(self) -> MotionData
+```
+
+##### データクラス階層
+
+```python
+@dataclass
+class SensorData:
+    environment: EnvironmentData
+    motion: MotionData
+
+@dataclass  
+class EnvironmentData:
+    temperature: float  # 温度（℃）
+    humidity: float     # 湿度（%）
+    pressure: float     # 気圧（hPa）
+    light: float        # 照度（lux）
+    uv: int            # UV値
+    voc: float         # VOC値
+
+@dataclass
+class MotionData:
+    orientation: Orientation    # 姿勢角
+    acceleration: Vector3D     # 加速度
+    gyroscope: Vector3D        # ジャイロ
+    magnetic: Vector3D         # 磁場
+```
+
+### 開発環境セットアップ
+
+```bash
+# プロジェクトクローン
+git clone <repository-url>
+cd raspizw-sensor-serial
+
+# 開発用仮想環境
+python3 -m venv dev-venv
+source dev-venv/bin/activate
+
+# 依存関係
+pip install -r requirements.txt
+```
+
+### 機能拡張ガイド
+
+#### 新しいコマンドの追加
+
+1. **`_validate_command()`の更新:**
+
+```python
+def _validate_command(self, command: str) -> bool:
+    # 許可されたコマンドのリスト
+    valid_commands = [
+        "get_sensor_data", 
+        "ping", 
+        "status",
+        "new_command"  # 新しいコマンドを追加
+    ]
+    
+    if command not in valid_commands:
+        self.logger.warning(f"無効なコマンド: {command}")
+        return False
+    
+    return True
+```
+
+2. **`_process_command()`の更新:**
+
+```python
+def _process_command(self, command: str) -> bytes:
+    try:
+        if command == "new_command":
+            # 新しい処理ロジック
+            result = self._handle_new_command()
+            response = json.dumps(result)
+            return f"{response}\r\n".encode('utf-8')
+        
+        # 既存のコマンド処理...
+        
+    except Exception as e:
+        self.logger.error(f"コマンド処理エラー: {e}")
+        error_response = json.dumps({"error": f"processing error: {str(e)}"})
+        return f"{error_response}\r\n".encode('utf-8')
+```
+
+3. **処理メソッドの実装:**
+
+```python
+def _handle_new_command(self) -> Dict[str, Any]:
+    """新しいコマンドの処理ロジック
+    
+    Returns:
+        コマンドの実行結果
+    """
+    return {"result": "success", "data": "command executed"}
+```
+
+
+## 🔗 関連リンク
+
+- [Waveshare Environment Sensor HAT](https://www.waveshare.com/wiki/Environment_Sensor_HAT)
+- [Raspberry Pi USB-OTG設定ガイド](https://suzu-ha.com/entry/2024/06/01/232052)
+- [Python Serial通信ドキュメント](https://pyserial.readthedocs.io/)
