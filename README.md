@@ -32,12 +32,42 @@ Raspberry Pi Zero W上でセンサーデータをシリアル通信で提供す�
 
 ## 🚀 インストール
 
-```bash
-# 依存関係のインストール
-pip install -r requirements.txt
+1. 以下の記事を参考に、USB-OTGで、PC-ラズパイ間のシリアル通信を有効化する
+    - https://suzu-ha.com/entry/2024/06/01/232052
+    - ⚠：「serial-getty@ttyGS0.service の有効化」は不要。
+        - これをすると、ラズパイのコンソールがシリアルポートに出力され、シリアルサーバーが起動しなくなる。
 
-# 実行権限の付与（Linux/macOS）
-chmod +x sensor-serial-server.py test_serial_client.py
+```bash
+# 各種前提パッケージのインストール
+sudo apt-get install python3-smbus
+sudo -H apt-get install python3-pil
+sudo apt-get install i2c-tools
+pip install RPi.GPIO
+```
+
+```bash
+# I2Cの有効化
+sudo raspi-config
+# 「3 Interfacing Options」→「I5 I2C」を選択し、有効化
+```
+
+```bash
+# Python環境のセットアップ
+python3 -m venv venv
+source venv/bin/activate
+# 必要なパッケージのインストール
+pip install -r requirements.txt
+```
+
+```bash
+# ---USBポートの確認と設定
+python -m serial.tools.list_ports
+# /dev/ttyS0などが表示される。
+
+# ---使用するシリアルポートの指定
+nano config.json
+# serial.portの値を、上記で確認したポートに変更する。
+# このとき、ttyS0はttyGS0に変更すること。
 ```
 
 ## ⚙️ 設定
@@ -47,7 +77,7 @@ chmod +x sensor-serial-server.py test_serial_client.py
 ```json
 {
     "serial": {
-        "port": "/dev/ttyUSB0",        # シリアルポート
+        "port": "/dev/ttyGS0",         # シリアルポート
         "baudrate": 9600,              # ボーレート
         "timeout": 1.0,                # 読み取りタイムアウト
         "write_timeout": 1.0           # 書き込みタイムアウト
@@ -93,6 +123,8 @@ python test_serial_client.py /dev/ttyUSB1
 | `get_sensor_data` | 全センサーデータを取得 | `{"environment": {...}, "motion": {...}}` |
 | `ping` | 接続確認 | `{"status": "pong"}` |
 | `status` | サーバー状態確認 | `{"sensor_initialized": true, "running": true, "port": "/dev/ttyUSB0"}` |
+
+- すべてのコマンドは、「\r\n」で終端して送信される必要があります。
 
 ### レスポンス形式
 
@@ -162,28 +194,15 @@ grep ERROR sensor_server.log
 systemdサービスとして常駐させる場合：
 
 ```bash
-# サービスファイル作成（例）
-sudo nano /etc/systemd/system/sensor-serial.service
+sudo cp sensor-serial-server.service /etc/systemd/system/
+sudo systemctl enable sensor-serial-server
+sudo systemctl start sensor-serial-server
+```
 
-# 内容例：
-[Unit]
-Description=Sensor Serial Server
-After=network.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/raspizw-sensor-serial
-ExecStart=/usr/bin/python3 sensor-serial-server.py
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-
-# サービス有効化
-sudo systemctl enable sensor-serial.service
-sudo systemctl start sensor-serial.service
+停止・無効化する場合：
+```bash
+sudo systemctl stop sensor-serial-server
+sudo systemctl disable sensor-serial-server
 ```
 
 ## 📝 開発者向け情報
