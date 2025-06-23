@@ -217,7 +217,7 @@ class SensorSerialServer:
             if serial_port.in_waiting > 0:
                 line = serial_port.readline()
                 if line:
-                    decoded = line.decode('utf-8', errors='replace').strip()
+                    decoded = line.decode('utf-8', errors='replace')
                     return decoded
         except (serial.SerialException, UnicodeDecodeError) as e:
             self.logger.error(f"シリアル読み取りエラー: {e}")
@@ -256,24 +256,22 @@ class SensorSerialServer:
                     if data:
                         temp_data += data
                     
-                    # コマンド完了チェック（改行で区切られたコマンド）
+                    # コマンド完了チェック(最後に改行がある場合、コマンドを処理する)
                     if '\n' in temp_data or '\r' in temp_data:
-                        lines = temp_data.replace('\r\n', '\n').replace('\r', '\n').split('\n')
-                        
-                        for line in lines[:-1]:  # 最後の要素は不完全な可能性があるため除外
-                            command = line.strip()
-                            if command:
-                                self.logger.info(f"コマンド受信: {command}")
-                                
-                                if self._validate_command(command):
-                                    response = self._process_command(command)
-                                    if self._write_serial_data(serial_port, response):
-                                        self.logger.debug(f"応答送信完了: {len(response)} bytes")
-                                else:
-                                    error_response = b'{"error": "invalid command"}\r\n'
-                                    self._write_serial_data(serial_port, error_response)
-                        
-                        temp_data = lines[-1]  # 残りのデータを保持
+                        if not temp_data.endswith('\n'):
+                            continue
+                        command = temp_data.rstrip('\n').rstrip('\r')
+                        if command:
+                            self.logger.info(f"コマンド受信: {command}")
+                            
+                            if self._validate_command(command):
+                                response = self._process_command(command)
+                                if self._write_serial_data(serial_port, response):
+                                    self.logger.debug(f"応答送信完了: {len(response)} bytes")
+                            else:
+                                error_response = b'{"error": "invalid command"}\r\n'
+                                self._write_serial_data(serial_port, error_response)
+                        temp_data = ""
                     
                     # CPU使用率を抑制
                     time.sleep(loop_interval)
