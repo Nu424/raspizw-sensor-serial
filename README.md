@@ -7,12 +7,19 @@ Raspberry Pi Zero W上でEnvironment Sensor HATからセンサーデータを取
 - [📖 概要](#-概要)
 - [🎯 主な機能・改善点](#-主な機能改善点)
 - [🚀 利用者向けガイド](#-利用者向けガイド)
-  - [前提条件](#前提条件)
-  - [インストールと初期設定](#インストールと初期設定)
-  - [設定](#設定)
-  - [実行](#実行)
-  - [API仕様](#api仕様)
-  - [トラブルシューティング](#トラブルシューティング)
+  - [📡 サーバー側（Raspberry Pi）セットアップ](#-サーバー側raspberry-piセットアップ)
+    - [前提条件](#前提条件)
+    - [インストールと初期設定](#インストールと初期設定)
+    - [設定](#設定)
+    - [実行](#実行)
+    - [API仕様](#api仕様)
+    - [サーバー側のトラブルシューティング](#サーバー側のトラブルシューティング)
+  - [💻 クライアント側（PC/外部デバイス）セットアップ](#-クライアント側pc外部デバイスセットアップ)
+    - [前提条件](#前提条件-1)
+    - [インストール](#インストール)
+    - [PiSensorClientの使用方法](#pisensorclientの使用方法)
+    - [PiSensorClient API リファレンス](#pisensorclient-api-リファレンス)
+    - [クライアント側のトラブルシューティング](#クライアント側のトラブルシューティング)
 - [⚙️ システム管理者向けガイド](#️-システム管理者向けガイド)
   - [サービス化](#サービス化)
   - [パフォーマンス監視](#パフォーマンス監視)
@@ -64,6 +71,34 @@ Raspberry Pi Zero W上でEnvironment Sensor HATからセンサーデータを取
 ---
 
 ## 🚀 利用者向けガイド
+
+本システムは、**サーバー側（Raspberry Pi）**と**クライアント側（PC/外部デバイス）**の2つのコンポーネントで構成されています。
+
+### システム構成図
+
+```
+┌─────────────────────┐    ┌─────────────────────────┐
+│   クライアント側    │    │     サーバー側         │
+│   （PC/外部機器）   │    │  （Raspberry Pi）      │
+│                     │    │                         │
+│ ┌─────────────────┐ │    │ ┌─────────────────────┐ │
+│ │ PiSensorClient  │ │◄──►│ │ sensor-serial-server│ │
+│ │    (Python)     │ │    │ │      (Python)       │ │
+│ └─────────────────┘ │    │ └─────────────────────┘ │
+│                     │    │           │             │
+│ ┌─────────────────┐ │    │ ┌─────────────────────┐ │
+│ │ あなたのアプリ  │ │    │ │ Environment        │ │
+│ │                 │ │    │ │ Sensor HAT         │ │
+│ └─────────────────┘ │    │ └─────────────────────┘ │
+└─────────────────────┘    └─────────────────────────┘
+         │                            │
+         └────── シリアル通信 ─────────┘
+            （USB/USB-OTG）
+```
+
+---
+
+## 📡 サーバー側（Raspberry Pi）セットアップ
 
 ### 前提条件
 
@@ -270,6 +305,195 @@ get_sensor_data\r\n
     "error": "invalid command"      // エラーメッセージ
 }
 ```
+
+### サーバー側のトラブルシューティング
+
+#### 一般的な問題と解決方法
+
+| 問題 | 症状 | 解決方法 |
+|------|------|----------|
+| シリアルポート接続失敗 | `Serial port not found` エラー | ポート名の確認、USB-OTG設定の再確認 |
+| センサー初期化失敗 | `Sensor initialization failed` | I2C接続確認、HATの接続確認 |
+| 権限エラー | `Permission denied` | `sudo usermod -a -G dialout $USER` でユーザーをdialoutグループに追加 |
+
+#### ログ確認方法
+
+```bash
+# リアルタイムログ監視
+tail -f sensor_server.log
+
+# エラーレベルのログのみ表示
+grep "ERROR" sensor_server.log
+
+# 特定期間のログ確認
+journalctl -u sensor-serial-server --since "1 hour ago"
+```
+
+---
+
+## 💻 クライアント側（PC/外部デバイス）セットアップ
+
+### 前提条件
+
+#### ハードウェア要件
+- Windows/macOS/Linux PC
+- USBシリアル変換器、またはUSB-OTG対応デバイス
+- Raspberry Piへのシリアル接続（USB接続）
+
+#### ソフトウェア要件
+- Python 3.7以上
+- pyserial ライブラリ
+
+### インストール
+
+#### 1. 必要なファイルの取得
+
+```bash
+# プロジェクトのクローンまたは必要ファイルのダウンロード
+git clone <repository-url>
+cd raspizw-sensor-serial
+
+# または、以下のファイルのみをダウンロード：
+# - PiSensorClient.py
+# - SensorType.py
+```
+
+#### 2. Python依存関係のインストール
+
+```bash
+# pyserialのインストール
+pip install pyserial
+
+# プロジェクト全体の依存関係（オプション）
+pip install -r requirements.txt
+```
+
+#### 3. シリアルポートの確認
+
+**Windows:**
+```cmd
+# デバイスマネージャーで確認、または
+python -m serial.tools.list_ports
+# 例: COM3, COM4, etc.
+```
+
+**macOS/Linux:**
+```bash
+ls /dev/tty*
+# 例: /dev/ttyUSB0, /dev/cu.usbserial-*, etc.
+```
+
+### PiSensorClientの使用方法
+
+```python
+from PiSensorClient import PiSensorClient
+
+# 接続の確立
+pi_sensor = PiSensorClient(port="COM3")  # Windowsの場合
+# pi_sensor = PiSensorClient(port="/dev/ttyUSB0")  # Linux/macOSの場合
+
+# シリアル接続を開始
+if pi_sensor.connect():
+    print("接続成功！")
+    
+    try:
+        # センサーデータの取得
+        sensor_data = pi_sensor.get_sensor_data()
+        print(f"温度: {sensor_data.environment.temperature}°C")
+        print(f"湿度: {sensor_data.environment.humidity}%")
+        print(f"気圧: {sensor_data.environment.pressure} hPa")
+        
+        # サーバー状態の確認
+        status = pi_sensor.get_status()
+        print(f"サーバー稼働状態: {status.running}")
+        
+        # 疎通確認
+        ping_result = pi_sensor.ping()
+        print(f"Ping結果: {ping_result.status}")
+        
+    except Exception as e:
+        print(f"エラー: {e}")
+    
+    finally:
+        # 接続を終了
+        pi_sensor.disconnect()
+        print("接続を終了しました")
+else:
+    print("接続に失敗しました")
+```
+
+### PiSensorClient API リファレンス
+
+#### クラスメソッド
+
+##### `__init__(port: str, baudrate: int = 9600)`
+- **port**: シリアルポート名（例: "COM3", "/dev/ttyUSB0"）
+- **baudrate**: 通信速度（デフォルト: 9600）
+
+##### `connect() -> bool`
+シリアル接続を開始
+- **戻り値**: 接続成功時True、失敗時False
+
+##### `disconnect() -> None`
+シリアル接続を終了
+
+##### `get_sensor_data() -> SensorData`
+全センサーデータを取得
+- **戻り値**: `SensorData`オブジェクト
+- **例外**: 通信エラー時に`ValueError`
+
+##### `get_status() -> PiSensorStatus`
+サーバー状態を取得
+- **戻り値**: `PiSensorStatus`オブジェクト
+- **例外**: 通信エラー時に`ValueError`
+
+##### `ping() -> PiSensorPing`
+疎通確認
+- **戻り値**: `PiSensorPing`オブジェクト
+- **例外**: 通信エラー時に`ValueError`
+
+#### データクラス
+
+##### `SensorData`
+```python
+@dataclass
+class SensorData:
+    environment: EnvironmentData    # 環境センサーデータ
+    motion: MotionData             # モーションセンサーデータ
+```
+
+##### `EnvironmentData`
+```python
+@dataclass
+class EnvironmentData:
+    temperature: float  # 温度（℃）
+    humidity: float     # 湿度（%）
+    pressure: float     # 気圧（hPa）
+    light: float        # 照度（lux）
+    uv: int            # UV値
+    voc: float         # VOC値
+```
+
+##### `MotionData`
+```python
+@dataclass
+class MotionData:
+    orientation: Orientation    # 姿勢角（roll, pitch, yaw）
+    acceleration: Vector3D     # 加速度（x, y, z）
+    gyroscope: Vector3D        # ジャイロ（x, y, z）
+    magnetic: Vector3D         # 磁場（x, y, z）
+```
+
+### クライアント側のトラブルシューティング
+
+#### 一般的な問題と解決方法
+
+| 問題 | 症状 | 解決方法 |
+|------|------|----------|
+| シリアルポート接続失敗 | `接続エラー` | ポート名の確認、デバイスドライバの確認 |
+| 応答タイムアウト | `応答がありません` | ケーブル接続確認、サーバー側の動作確認 |
+| データパースエラー | `JSON decode error` | 通信品質確認、ボーレート設定確認 |
+| 権限エラー（Linux/macOS） | `Permission denied` | `sudo chmod 666 /dev/ttyUSB0` または dialout グループ追加 |
 
 ---
 
