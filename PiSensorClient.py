@@ -1,14 +1,14 @@
 """
-# PiSensor.py
+# PiSensorClient.py
 sensor-serial-server.pyが動作するRaspberry Pi Zero Wを、
 外部センサーとして楽に使用するためのクラス。
 
 ## 使い方
 ```python
-from PiSensor import PiSensor
+from PiSensorClient import PiSensorClient
 
 # ---シリアル接続を開始
-pi_sensor = PiSensor(port="COM20")
+pi_sensor = PiSensorClient(port="COM20")
 pi_sensor.connect()
 
 # ---センサーデータの取得
@@ -61,7 +61,7 @@ class PiSensorStatus:
 # ----------
 # ----------
 # ----------
-class PiSensor:
+class PiSensorClient:
     """sensor-serial-server.pyが動作するRaspberry Pi Zero Wを、
     外部センサーとして楽に使用するためのクラス。
     """
