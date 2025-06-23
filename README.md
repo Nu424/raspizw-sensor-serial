@@ -277,38 +277,61 @@ get_sensor_data\r\n
 
 ### サービス化
 
-#### systemdサービスの設定
+systemdを利用して、サーバーをバックグラウンドサービスとして自動起動できます。
 
-プロダクション環境での自動起動設定:
+#### 1. サービスファイルの編集
+
+プロジェクトに含まれる `sensor-serial-server.service` ファイルを編集します。
+`WorkingDirectory` と `ExecStart` に書かれているプレースホルダー `/path/to/your/project` を、`raspizw-sensor-serial` プロジェクトをクローンした実際の絶対パスに置き換えてください。
+
+**例:** `/home/pi/raspizw-sensor-serial` など
+
+```ini
+[Unit]
+Description=Sensor Serial Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/path/to/your/project
+ExecStart=/path/to/your/project/venv/bin/python3 /path/to/your/project/sensor-serial-server.py
+Restart=on-failure
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+#### 2. サービスのインストールと起動
 
 ```bash
-# サービスファイルのコピー
+# 編集したサービスファイルをシステムディレクトリにコピー
 sudo cp sensor-serial-server.service /etc/systemd/system/
 
-# サービスファイルの編集（パスを環境に合わせて修正）
-sudo nano /etc/systemd/system/sensor-serial-server.service
+# systemdに新しいサービスを認識させる
+sudo systemctl daemon-reload
+
+# サービスを有効化（OS起動時に自動実行）
+sudo systemctl enable sensor-serial-server.service
+
+# サービスを開始
+sudo systemctl start sensor-serial-server.service
 ```
 
-#### サービス管理
+#### 3. サービスの状態確認
 
 ```bash
-# サービス有効化・開始
-sudo systemctl enable sensor-serial-server
-sudo systemctl start sensor-serial-server
+# サービスの状態を確認
+sudo systemctl status sensor-serial-server.service
 
-# ステータス確認
-sudo systemctl status sensor-serial-server
-
-# ログ確認
-sudo journalctl -u sensor-serial-server -f
-
-# サービス停止・無効化
-sudo systemctl stop sensor-serial-server
-sudo systemctl disable sensor-serial-server
+# ログのリアルタイム表示
+sudo journalctl -u sensor-serial-server.service -f
 ```
 
+### パフォーマンス監視
 
-### ログ管理
+#### ログ管理
 
 #### ログローテーション設定
 
