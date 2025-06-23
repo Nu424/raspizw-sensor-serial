@@ -1,6 +1,6 @@
 {
     "serial": {
-        "port": "/dev/ttyUSB0",
+        "port": "/dev/ttyGS0",
         "baudrate": 9600,
         "timeout": 1.0,
         "write_timeout": 1.0
@@ -17,4 +17,4 @@
         "max_bytes": 1048576,
         "backup_count": 3
     }
-} 
+}

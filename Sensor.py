@@ -48,7 +48,6 @@ data = sensor_hub.read_all()
 
 """
 
-from dataclasses import dataclass
 from typing import Union
 import time
 from modules import ICM20948  # Gyroscope/Acceleration/Magnetometer
