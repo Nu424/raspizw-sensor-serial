@@ -1,0 +1,14 @@
+[Unit]
+Description=Sensor Serial Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/XXX/workspace/raspizw-sensor-serial
+ExecStart=/home/XXX/workspace/raspizw-sensor-serial/venv/bin/python3 /home/XXX/workspace/raspizw-sensor-serial/sensor-serial-server.py
+Restart=on-failure
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
