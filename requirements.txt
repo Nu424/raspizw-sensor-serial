@@ -1,2 +1,2 @@
 pyserial
-smbus
+# smbus # for Raspberry Pi Zero W
